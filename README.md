@@ -120,7 +120,10 @@ kv_namespaces = [
 Create a `.dev.vars` file:
 ```bash
 # Required: OAuth2 credentials JSON from Gemini CLI authentication
-GCP_SERVICE_ACCOUNT={"access_token":"ya29...","refresh_token":"1//...","scope":"...","token_type":"Bearer","id_token":"eyJ...","expiry_date":1750927763467}
+GCP_SERVICE_ACCOUNT_0={"access_token":"ya29...","refresh_token":"1//...","scope":"...","token_type":"Bearer","id_token":"eyJ...","expiry_date":1750927763467}
+GCP_SERVICE_ACCOUNT_1=...
+GCP_SERVICE_ACCOUNT_2=...
+GCP_SERVICE_ACCOUNT_99=...
 
 # Optional: Google Cloud Project ID (auto-discovered if not set)
 # GEMINI_PROJECT_ID=your-project-id
@@ -133,7 +136,8 @@ OPENAI_API_KEY=sk-your-secret-api-key-here
 
 For production, set the secrets:
 ```bash
-wrangler secret put GCP_SERVICE_ACCOUNT
+wrangler secret put GCP_SERVICE_ACCOUNT_0
+wrangler secret put GCP_SERVICE_ACCOUNT_1
 wrangler secret put OPENAI_API_KEY  # Optional, only if you want authentication
 ```
 
@@ -158,7 +162,7 @@ npm run dev
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GCP_SERVICE_ACCOUNT` | ✅ | OAuth2 credentials JSON string. |
+| `GCP_SERVICE_ACCOUNT_*` | ✅ | OAuth2 credentials JSON string. |
 | `GEMINI_PROJECT_ID` | ❌ | Google Cloud Project ID (auto-discovered if not set). |
 | `OPENAI_API_KEY` | ❌ | API key for authentication. If not set, the API is public. |
 

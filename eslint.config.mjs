@@ -19,7 +19,7 @@ export default defineConfig([{
         "no-unused-vars": "off", // Disable the base rule
         "@typescript-eslint/no-unused-vars": ["error", {
             "args": "all", // Flag all unused arguments
-            "argsIgnorePattern": "^$", // Do not ignore any arguments
+            "argsIgnorePattern": "^_$", // Ignore only underscores
             "varsIgnorePattern": "^$", // Do not ignore any variables
             "caughtErrorsIgnorePattern": "^$" // Do not ignore caught errors
         }]

@@ -143,6 +143,7 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 
 		// Initialize services
 		const authManager = new AuthManager(c.env);
+		await authManager.rotateCredentials();
 		const geminiClient = new GeminiApiClient(c.env, authManager);
 
 		// Test authentication first

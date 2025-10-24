@@ -1,7 +1,9 @@
 import { Env, OAuth2Credentials } from "./types";
+import { hashString } from "./utils/hashing";
 import {
 	CODE_ASSIST_ENDPOINT,
 	CODE_ASSIST_API_VERSION,
+	KV_CREDS_INDEX,
 	OAUTH_CLIENT_ID,
 	OAUTH_CLIENT_SECRET,
 	OAUTH_REFRESH_URL,
@@ -38,6 +40,9 @@ interface TokenCacheInfo {
 export class AuthManager {
 	private env: Env;
 	private accessToken: string | null = null;
+	private credsIndex: number = 0;
+	private credsHash: number = 0;
+	private credentials: string[] = [];
 
 	constructor(env: Env) {
 		this.env = env;
@@ -47,16 +52,19 @@ export class AuthManager {
 	 * Initializes authentication using OAuth2 credentials with KV storage caching.
 	 */
 	public async initializeAuth(): Promise<void> {
-		if (!this.env.GCP_SERVICE_ACCOUNT) {
-			throw new Error("`GCP_SERVICE_ACCOUNT` environment variable not set. Please provide OAuth2 credentials JSON.");
-		}
+		if (this.credentials.length == 0)
+			throw new Error("`GCP_SERVICE_ACCOUNT_*` environment variable not set. Please provide OAuth2 credentials JSON.");
+
+		// Parse original credentials from environment.
+		const oauth2Creds: OAuth2Credentials = JSON.parse(this.credentials[this.credsIndex]);
+		this.credsHash = hashString(oauth2Creds.id_token);
 
 		try {
 			// First, try to get a cached token from KV storage
 			let cachedTokenData = null;
 
 			try {
-				const cachedToken = await this.env.GEMINI_CLI_KV.get(KV_TOKEN_KEY, "json");
+				const cachedToken = await this.env.GEMINI_CLI_KV.get(`${KV_TOKEN_KEY}_${this.credsHash}`, "json");
 				if (cachedToken) {
 					cachedTokenData = cachedToken as CachedTokenData;
 					console.log("Found cached token in KV storage");
@@ -75,9 +83,6 @@ export class AuthManager {
 				}
 				console.log("Cached token expired or expiring soon");
 			}
-
-			// Parse original credentials from environment
-			const oauth2Creds: OAuth2Credentials = JSON.parse(this.env.GCP_SERVICE_ACCOUNT);
 
 			// Check if the original token is still valid
 			const timeUntilExpiry = oauth2Creds.expiry_date - Date.now();
@@ -99,6 +104,26 @@ export class AuthManager {
 			console.error("Failed to initialize authentication:", e);
 			throw new Error("Authentication failed: " + errorMessage);
 		}
+	}
+
+	public async rotateCredentials() {
+		this.credentials = Array.from({ length: 100 })
+			.map((_, i) => {
+				return (this.env[("GCP_SERVICE_ACCOUNT_" + i) as keyof Env] ?? "") as string;
+			})
+			.filter((s) => s.length > 0);
+
+		this.credsIndex = Math.min(
+			parseInt((await this.env.GEMINI_CLI_KV.get(KV_CREDS_INDEX, "text").catch(() => "0")) ?? "0"),
+			this.credentials.length - 1
+		);
+
+		console.log(this.credsIndex);
+
+		let nextCredsIndex = this.credsIndex + 1;
+		if (nextCredsIndex > this.credentials.length - 1) nextCredsIndex = 0;
+		console.log("Rotated credentials to", nextCredsIndex);
+		await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, nextCredsIndex.toString());
 	}
 
 	/**
@@ -154,7 +179,7 @@ export class AuthManager {
 			const ttlSeconds = Math.floor((expiryDate - Date.now()) / 1000) - 300; // 5 minutes buffer
 
 			if (ttlSeconds > 0) {
-				await this.env.GEMINI_CLI_KV.put(KV_TOKEN_KEY, JSON.stringify(tokenData), {
+				await this.env.GEMINI_CLI_KV.put(`${KV_TOKEN_KEY}_${this.credsHash}`, JSON.stringify(tokenData), {
 					expirationTtl: ttlSeconds
 				});
 				console.log(`Token cached in KV storage with TTL of ${ttlSeconds} seconds`);
@@ -172,7 +197,7 @@ export class AuthManager {
 	 */
 	public async clearTokenCache(): Promise<void> {
 		try {
-			await this.env.GEMINI_CLI_KV.delete(KV_TOKEN_KEY);
+			await this.env.GEMINI_CLI_KV.delete(`${KV_TOKEN_KEY}_${this.credsHash}`);
 			console.log("Cleared cached token from KV storage");
 		} catch (kvError) {
 			console.log("Error clearing KV cache:", kvError);
@@ -184,7 +209,7 @@ export class AuthManager {
 	 */
 	public async getCachedTokenInfo(): Promise<TokenCacheInfo> {
 		try {
-			const cachedToken = await this.env.GEMINI_CLI_KV.get(KV_TOKEN_KEY, "json");
+			const cachedToken = await this.env.GEMINI_CLI_KV.get(`${KV_TOKEN_KEY}_${this.credsHash}`, "json");
 			if (cachedToken) {
 				const tokenData = cachedToken as CachedTokenData;
 				const timeUntilExpiry = tokenData.expiry_date - Date.now();
