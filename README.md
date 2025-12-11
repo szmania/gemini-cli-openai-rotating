@@ -161,9 +161,10 @@ npm run dev
 #### Core Configuration
 
 | Variable | Required | Description |
-|----------|----------|-------------|
-| `GCP_SERVICE_ACCOUNT_*` | ✅ | OAuth2 credentials JSON string. |
-| `GEMINI_PROJECT_ID` | ❌ | Google Cloud Project ID (auto-discovered if not set). |
+|---|---|---|
+| `GCP_SERVICE_ACCOUNT_*` | ✅ | OAuth2 credentials JSON string. Supports rotation with `_0`, `_1`, etc. |
+| `GEMINI_PROJECT_ID` | ❌ | Google Cloud Project ID. Used as a fallback if a per-credential ID (`GEMINI_PROJECT_ID_*`) is not set. Auto-discovered if omitted. |
+| `GEMINI_PROJECT_ID_*` | ❌ | Per-credential project ID. `GEMINI_PROJECT_ID_0` corresponds to `GCP_SERVICE_ACCOUNT_0`. Overrides the global `GEMINI_PROJECT_ID`. |
 | `OPENAI_API_KEY` | ❌ | API key for authentication. If not set, the API is public. |
 
 #### Thinking & Reasoning

@@ -10,6 +10,11 @@ GCP_SERVICE_ACCOUNT_99=....
 # Optional: Google Cloud Project ID (auto-discovered if not set)
 # GEMINI_PROJECT_ID=your-project-id
 
+# Optional: Per-credential Google Cloud Project ID. Overrides GEMINI_PROJECT_ID.
+# If GCP_SERVICE_ACCOUNT_0 is used, GEMINI_PROJECT_ID_0 will be used if it exists.
+# GEMINI_PROJECT_ID_0=your-project-id-for-account-0
+# GEMINI_PROJECT_ID_1=your-project-id-for-account-1
+
 # Optional: API key for authentication (if not set, API is public)
 # When set, clients must include "Authorization: Bearer <your-api-key>" header
 # Example: sk-1234567890abcdef1234567890abcdef

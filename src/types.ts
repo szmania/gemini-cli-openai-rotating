@@ -10,6 +10,7 @@ export type SafetyThreshold =
 
 // --- Environment Variable Typings ---
 export interface Env {
+	[key: string]: any; // Allow dynamic keys for GEMINI_PROJECT_ID_*
 	// GCP_SERVICE_ACCOUNT: string; // Contains OAuth2 credentials JSON
 	GEMINI_PROJECT_ID?: string;
 	GEMINI_CLI_KV: KVNamespace; // Cloudflare KV for token caching

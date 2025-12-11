@@ -40,7 +40,7 @@ interface TokenCacheInfo {
 export class AuthManager {
 	private env: Env;
 	private accessToken: string | null = null;
-	private credsIndex: number = 0;
+	public credsIndex: number = 0;
 	private credsHash: number = 0;
 	private credentials: string[] = [];
 

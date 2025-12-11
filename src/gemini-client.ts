@@ -104,6 +104,15 @@ export class GeminiApiClient {
 	 * Discovers the Google Cloud project ID. Uses the environment variable if provided.
 	 */
 	public async discoverProjectId(): Promise<string> {
+		// Check for an indexed project ID first
+		const credsIndex = this.authManager.credsIndex;
+		const indexedProjectIdVar = `GEMINI_PROJECT_ID_${credsIndex}`;
+		const indexedProjectId = this.env[indexedProjectIdVar] as string | undefined;
+
+		if (indexedProjectId) {
+			return indexedProjectId;
+		}
+
 		if (this.env.GEMINI_PROJECT_ID) {
 			return this.env.GEMINI_PROJECT_ID;
 		}
