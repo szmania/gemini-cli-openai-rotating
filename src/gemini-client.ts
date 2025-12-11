@@ -581,6 +581,26 @@ export class GeminiApiClient {
 						nativeToolsManager
 					);
 					return;
+				} else {
+					// Auto model switching is disabled, try rotating to next credential
+					const rotated = await this.authManager.forceNextCredential();
+					if (rotated) {
+						console.log(
+							`Got ${response.status} error for model ${originalModel}, rotating to next credential and retrying`
+						);
+						
+						// Retry with the same original request but with new credential
+						yield* this.performStreamRequest(
+							streamRequest,
+							needsThinkingClose,
+							true,
+							realThinkingAsContent,
+							originalModel,
+							nativeToolsManager
+						);
+						return;
+					}
+					// If rotation failed, we'll fall through to throw the original error
 				}
 			}
 

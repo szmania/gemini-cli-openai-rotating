@@ -266,4 +266,43 @@ export class AuthManager {
 	public getAccessToken(): string | null {
 		return this.accessToken;
 	}
+
+	/**
+	 * Forces rotation to the next available credential and re-initializes authentication.
+	 * This is used for retrying requests with a different account when one is rate-limited.
+	 * @returns Promise<boolean> indicating if rotation was successful
+	 */
+	public async forceNextCredential(): Promise<boolean> {
+		// Ensure credentials array is populated
+		if (this.credentials.length === 0) {
+			this.credentials = Array.from({ length: 100 })
+				.map((_, i) => {
+					return (this.env[("GCP_SERVICE_ACCOUNT_" + i) as keyof Env] ?? "") as string;
+				})
+				.filter((s) => s.length > 0);
+		}
+
+		// If we only have one credential or none, we can't rotate
+		if (this.credentials.length <= 1) {
+			console.log("Cannot rotate credentials: only one or no credentials available");
+			return false;
+		}
+
+		// Calculate the next credential index
+		const nextCredsIndex = (this.credsIndex + 1) % this.credentials.length;
+		
+		// Update current index
+		this.credsIndex = nextCredsIndex;
+		
+		// Update KV store to point to the following credential for the next request
+		const followingIndex = (nextCredsIndex + 1) % this.credentials.length;
+		await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, followingIndex.toString());
+		
+		// Reset access token and re-initialize auth with new credential
+		this.accessToken = null;
+		await this.initializeAuth();
+		
+		console.log(`Successfully rotated to credential index ${nextCredsIndex}`);
+		return true;
+	}
 }
