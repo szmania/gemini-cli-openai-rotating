@@ -21,9 +21,11 @@ services:
     environment:
       # Set NODE_ENV for development
       - NODE_ENV=development
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GCP_SERVICE_ACCOUNT_0=${GCP_SERVICE_ACCOUNT_0:-}
     # Load environment variables from .dev.vars file (if exists)
-    env_file:
-      - .dev.vars
+    #env_file:
+    #  - .dev.vars
     # Restart policy
     restart: unless-stopped
     # Health check
