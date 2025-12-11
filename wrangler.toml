@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # --- KV Namespaces ---
 kv_namespaces = [
-  { binding = "GEMINI_CLI_KV", id = "c1fc7eef19e242f8b0ef2902d4b08483" }
+  { binding = "GEMINI_CLI_KV", id = "6133aa07bf82461b816aee34c8cff89b" }
 ]
 
 # [vars]
