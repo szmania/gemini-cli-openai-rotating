@@ -13,7 +13,7 @@ services:
       - "8787:8787"  # Host:Container port mapping
     volumes:
       # Mount project directory for hot reloading during development
-      - .:/app
+      - /home/omv/gemini-cli-openai-rotating:/app
       # Exclude node_modules to avoid conflicts between host and container
       - /app/node_modules
       # Create named volume for persistent storage (KV, R2, etc.)
