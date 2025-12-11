@@ -2,7 +2,6 @@ version: '3.8'
 
 services:
   gemini-worker:
-    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile
