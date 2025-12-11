@@ -9,7 +9,9 @@ kv_namespaces = [
   { binding = "GEMINI_CLI_KV", id = "6133aa07bf82461b816aee34c8cff89b" }
 ]
 
-# [vars]
+[vars]
+STREAM_THINKING_AS_CONTENT = true
+ENABLE_AUTO_MODEL_SWITCHING = false
 
 
 # --- Local Development Configuration ---
