@@ -885,4 +885,33 @@ type: "thinking_content",
 		}
 		return undefined;
 	}
+
+	/**
+	 * Recursively sanitizes tool definitions by removing unsupported JSON schema fields
+	 * that cause Gemini API to reject requests with 400 INVALID_ARGUMENT errors.
+	 * 
+	 * @param data - The tool data to sanitize (objects, arrays, or primitives)
+	 */
+	private sanitizeTools(data: any): void {
+		if (Array.isArray(data)) {
+			// Process each item in the array
+			for (const item of data) {
+				this.sanitizeTools(item);
+			}
+		} else if (typeof data === 'object' && data !== null) {
+			// Delete unsupported fields from the object
+			delete data.$schema;
+			delete data.strict;
+			delete data.exclusiveMinimum;
+			delete data.exclusiveMaximum;
+			
+			// Recursively process nested objects/arrays
+			for (const key in data) {
+				if (data.hasOwnProperty(key)) {
+					this.sanitizeTools(data[key]);
+				}
+			}
+		}
+		// For primitives (string, number, boolean, null, undefined), do nothing
+	}
 }
