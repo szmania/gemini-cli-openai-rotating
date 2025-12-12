@@ -326,7 +326,8 @@ export class GeminiApiClient {
 			response_format?: {
 				type: "text" | "json_object";
 			};
-		} & NativeToolsRequestParams
+		} & NativeToolsRequestParams,
+		signal?: AbortSignal
 	): AsyncGenerator<StreamChunk> {
 		await this.authManager.initializeAuth();
 		const projectId = await this.discoverProjectId();
@@ -416,7 +417,8 @@ export class GeminiApiClient {
 			false,
 			includeReasoning && streamThinkingAsContent,
 			modelId,
-			nativeToolsManager
+			nativeToolsManager,
+			signal
 		);
 	}
 
@@ -524,7 +526,8 @@ export class GeminiApiClient {
 		isRetry: boolean = false,
 		realThinkingAsContent: boolean = false,
 		originalModel?: string,
-		nativeToolsManager?: NativeToolsManager
+		nativeToolsManager?: NativeToolsManager,
+		signal?: AbortSignal
 	): AsyncGenerator<StreamChunk> {
 		const citationsProcessor = new CitationsProcessor(this.env);
 		const response = await fetch(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:streamGenerateContent?alt=sse`, {
@@ -533,7 +536,8 @@ export class GeminiApiClient {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${this.authManager.getAccessToken()}`
 			},
-			body: JSON.stringify(streamRequest)
+			body: JSON.stringify(streamRequest),
+			signal
 		});
 
 		if (!response.ok) {
@@ -547,7 +551,8 @@ export class GeminiApiClient {
 					true,
 					realThinkingAsContent,
 					originalModel,
-					nativeToolsManager
+					nativeToolsManager,
+					signal
 				); // Retry once
 				return;
 			}
@@ -578,7 +583,8 @@ export class GeminiApiClient {
 						true,
 						realThinkingAsContent,
 						originalModel,
-						nativeToolsManager
+						nativeToolsManager,
+						signal
 					);
 					return;
 				} else {
@@ -588,7 +594,7 @@ export class GeminiApiClient {
 						console.log(
 							`Got ${response.status} error for model ${originalModel}, rotating to next credential and retrying`
 						);
-						
+
 						// Retry with the same original request but with new credential
 						yield* this.performStreamRequest(
 							streamRequest,
@@ -596,7 +602,8 @@ export class GeminiApiClient {
 							true,
 							realThinkingAsContent,
 							originalModel,
-							nativeToolsManager
+							nativeToolsManager,
+							signal
 						);
 						return;
 					}
@@ -605,6 +612,10 @@ export class GeminiApiClient {
 			}
 
 			const errorText = await response.text();
+			if (signal?.aborted) {
+				console.log("Stream request was aborted by the client.");
+				return; // Don't throw an error, just stop the generator.
+			}
 			console.error(`[GeminiAPI] Stream request failed: ${response.status}`, errorText);
 			throw new Error(`Stream request failed: ${response.status}`);
 		}
@@ -647,7 +658,7 @@ export class GeminiApiClient {
 							};
 						}
 					}
-					// Check if text content contains <think> tags (based on your original example)
+					// Check if text content contains <think>tags (based on your original example)
 					else if (part.text && part.text.includes("<think>")) {
 						if (realThinkingAsContent) {
 							// Extract thinking content and convert to our format
@@ -662,7 +673,7 @@ export class GeminiApiClient {
 								}
 
 								yield {
-									type: "thinking_content",
+type: "thinking_content",
 									data: thinkingMatch[1]
 								};
 							}
@@ -677,27 +688,27 @@ export class GeminiApiClient {
 									};
 									hasClosedThinking = true;
 								}
-								yield { type: "text", data: nonThinkingContent };
+								yield { type:"text", data: nonThinkingContent };
 							}
 						} else {
 							// Stream thinking as separate reasoning field
 							const thinkingMatch = part.text.match(/<think>(.*?)<\/think>/s);
 							if (thinkingMatch) {
 								yield {
-									type: "real_thinking",
+									type:"real_thinking",
 									data: thinkingMatch[1]
 								};
 							}
 
 							// Stream non-thinking content as regular text
 							const nonThinkingContent = part.text.replace(/<think>.*?<\/think>/gs, "").trim();
-							if (nonThinkingContent) {
+							if (nonThinkingContent){
 								yield { type: "text", data: nonThinkingContent };
 							}
 						}
 					}
 					// Handle regular content - only if it's not a thinking part and doesn't contain <think> tags
-					else if (part.text && !part.thought && !part.text.includes("<think>")) {
+					else if (part.text && !part.thought &&!part.text.includes("<think>")) {
 						// Close thinking tag before first real content if needed
 						if ((needsThinkingClose || (realThinkingAsContent && hasStartedThinking)) && !hasClosedThinking) {
 							yield {
@@ -777,7 +788,8 @@ export class GeminiApiClient {
 			response_format?: {
 				type: "text" | "json_object";
 			};
-		} & NativeToolsRequestParams
+		} & NativeToolsRequestParams,
+		signal?: AbortSignal
 	): Promise<{
 		content: string;
 		usage?: UsageData;
@@ -789,7 +801,7 @@ export class GeminiApiClient {
 			const tool_calls: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> = [];
 
 			// Collect all chunks from the stream
-			for await (const chunk of this.streamContent(modelId, systemPrompt, messages, options)) {
+			for await (const chunk of this.streamContent(modelId, systemPrompt, messages, options, signal)) {
 				if (chunk.type === "text" && typeof chunk.data === "string") {
 					content += chunk.data;
 				} else if (chunk.type === "usage" && typeof chunk.data === "object") {

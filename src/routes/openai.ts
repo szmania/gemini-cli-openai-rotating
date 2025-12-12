@@ -32,6 +32,7 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 	try {
 		console.log("Chat completions request received");
 		const body = await c.req.json<ChatCompletionRequest>();
+		const signal = c.req.raw.signal;
 		const model = body.model || DEFAULT_MODEL;
 		const messages = body.messages || [];
 		// OpenAI API compatibility: stream defaults to true unless explicitly set to false
@@ -167,28 +168,47 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 			(async () => {
 				try {
 					console.log("Starting stream generation");
-					const geminiStream = geminiClient.streamContent(model, systemPrompt, otherMessages, {
-						includeReasoning,
-						thinkingBudget,
-						tools,
-						tool_choice,
-						...generationOptions
-					});
+					const geminiStream = geminiClient.streamContent(
+						model,
+						systemPrompt,
+						otherMessages,
+						{
+							includeReasoning,
+							thinkingBudget,
+							tools,
+							tool_choice,
+							...generationOptions
+						},
+						signal
+					);
 
 					for await (const chunk of geminiStream) {
+						if (signal.aborted) {
+							console.log("Client disconnected, stopping stream pipe.");
+							break;
+						}
 						await writer.write(chunk);
 					}
 					console.log("Stream completed successfully");
-					await writer.close();
 				} catch (streamError: unknown) {
 					const errorMessage = streamError instanceof Error ? streamError.message : String(streamError);
-					console.error("Stream error:", errorMessage);
-					// Try to write an error chunk before closing
-					await writer.write({
-						type: "text",
-						data: `Error: ${errorMessage}`
-					});
-					await writer.close();
+					if (!signal.aborted) {
+						console.error("Stream error:", errorMessage);
+						try {
+							await writer.write({
+								type: "text",
+								data: `Error: ${errorMessage}`
+							});
+						} catch (writeError) {
+							// Ignore errors if writer is already closed
+						}
+					}
+				} finally {
+					try {
+						await writer.close();
+					} catch (closeError) {
+						// Ignore if already closed
+					}
 				}
 			})();
 
@@ -208,13 +228,19 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 			// Non-streaming response
 			try {
 				console.log("Starting non-streaming completion");
-				const completion = await geminiClient.getCompletion(model, systemPrompt, otherMessages, {
-					includeReasoning,
-					thinkingBudget,
-					tools,
-					tool_choice,
-					...generationOptions
-				});
+				const completion = await geminiClient.getCompletion(
+					model,
+					systemPrompt,
+					otherMessages,
+					{
+						includeReasoning,
+						thinkingBudget,
+						tools,
+						tool_choice,
+						...generationOptions
+					},
+					signal
+				);
 
 				const response: ChatCompletionResponse = {
 					id: `chatcmpl-${crypto.randomUUID()}`,
@@ -247,7 +273,9 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 				return c.json(response);
 			} catch (completionError: unknown) {
 				const errorMessage = completionError instanceof Error ? completionError.message : String(completionError);
-				console.error("Completion error:", errorMessage);
+				if (!signal.aborted) {
+					console.error("Completion error:", errorMessage);
+				}
 				return c.json({ error: errorMessage }, 500);
 			}
 		}
