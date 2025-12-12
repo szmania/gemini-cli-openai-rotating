@@ -385,6 +385,11 @@ export class GeminiApiClient {
 			needsThinkingClose = streamThinkingAsContent; // Only need to close if we streamed as content
 		}
 
+		// Sanitize tools to remove unsupported JSON schema fields that Gemini rejects
+		if (tools) {
+			this.sanitizeTools(tools);
+		}
+
 		const streamRequest: {
 			model: string;
 			project: string;
