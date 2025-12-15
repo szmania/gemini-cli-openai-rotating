@@ -33,7 +33,9 @@ export class AutoModelSwitchingHelper {
 	isRateLimitError(error: unknown): boolean {
 		return (
 			error instanceof Error &&
-			(error.message.includes("Stream request failed: 429") || error.message.includes("Stream request failed: 503"))
+			(error.message.includes("Stream request failed: 429") || 
+			 error.message.includes("Stream request failed: 503") || 
+			 error.message.includes("Stream request failed: 524"))
 		);
 	}
 
@@ -41,7 +43,7 @@ export class AutoModelSwitchingHelper {
 	 * Checks if the HTTP status code indicates a rate limit error.
 	 */
 	isRateLimitStatus(status: number): boolean {
-		return (RATE_LIMIT_STATUS_CODES as readonly number[]).includes(status);
+		return (RATE_LIMIT_STATUS_CODES as readonly number[]).includes(status) || status === 524;
 	}
 
 	/**
