@@ -562,47 +562,33 @@ export class GeminiApiClient {
 				return;
 			}
 
-			// Handle rate limiting with auto model switching
-			if (this.autoSwitchHelper.isRateLimitStatus(response.status) && !isRetry && originalModel) {
-				const fallbackModel = this.autoSwitchHelper.getFallbackModel(originalModel);
-				if (fallbackModel && this.autoSwitchHelper.isEnabled()) {
-					console.log(
-						`Got ${response.status} error for model ${originalModel}, switching to fallback model: ${fallbackModel}`
-					);
+			// Handle rate limiting and permission denied errors
+			const isRateLimited = this.autoSwitchHelper.isRateLimitStatus(response.status);
+			const isPermissionDenied = response.status === 403;
 
-					// Create new request with fallback model
-					const fallbackRequest = {
-						...(streamRequest as Record<string, unknown>),
-						model: fallbackModel
-					};
-
-					// Add a notification chunk about the model switch
-					yield {
-						type: "text",
-						data: this.autoSwitchHelper.createSwitchNotification(originalModel, fallbackModel)
-					};
-
-					yield* this.performStreamRequest(
-						fallbackRequest,
-						needsThinkingClose,
-						true,
-						realThinkingAsContent,
-						originalModel,
-						nativeToolsManager,
-						signal
-					);
-					return;
-				} else {
-					// Auto model switching is disabled, try rotating to next credential
-					const rotated = await this.authManager.forceNextCredential();
-					if (rotated) {
+			if ((isRateLimited || isPermissionDenied) && !isRetry) {
+				// Try model switching for rate limit errors when possible
+				if (isRateLimited && originalModel) {
+					const fallbackModel = this.autoSwitchHelper.getFallbackModel(originalModel);
+					if (fallbackModel && this.autoSwitchHelper.isEnabled()) {
 						console.log(
-							`Got ${response.status} error for model ${originalModel}, rotating to next credential and retrying`
+							`Got ${response.status} error for model ${originalModel}, switching to fallback model: ${fallbackModel}`
 						);
 
-						// Retry with the same original request but with new credential
+						// Create new request with fallback model
+						const fallbackRequest = {
+							...(streamRequest as Record<string, unknown>),
+							model: fallbackModel
+						};
+
+						// Add a notification chunk about the model switch
+						yield {
+							type: "text",
+							data: this.autoSwitchHelper.createSwitchNotification(originalModel, fallbackModel)
+						};
+
 						yield* this.performStreamRequest(
-							streamRequest,
+							fallbackRequest,
 							needsThinkingClose,
 							true,
 							realThinkingAsContent,
@@ -612,8 +598,28 @@ export class GeminiApiClient {
 						);
 						return;
 					}
-					// If rotation failed, we'll fall through to throw the original error
 				}
+
+				// Fallback to credential pivoting for both rate limiting (when model switching isn't possible) and permission denied
+				const rotated = await this.authManager.forceNextCredential();
+				if (rotated) {
+					console.log(
+						`Got ${response.status} error, rotating to next credential and retrying`
+					);
+
+					// Retry with the same original request but with new credential
+					yield* this.performStreamRequest(
+						streamRequest,
+						needsThinkingClose,
+						true,
+						realThinkingAsContent,
+						originalModel,
+						nativeToolsManager,
+						signal
+					);
+					return;
+				}
+				// If rotation failed, we'll fall through to throw the original error
 			}
 
 			const errorText = await response.text();
