@@ -566,7 +566,7 @@ export class GeminiApiClient {
 			const isRateLimited = this.autoSwitchHelper.isRateLimitStatus(response.status);
 			const isPermissionDenied = response.status === 403;
 
-			if ((isRateLimited || isPermissionDenied) && !isRetry) {
+			if (isRateLimited || isPermissionDenied) {
 				// Try model switching for rate limit errors when possible
 				if (isRateLimited && originalModel) {
 					const fallbackModel = this.autoSwitchHelper.getFallbackModel(originalModel);
