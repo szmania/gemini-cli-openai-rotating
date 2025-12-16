@@ -532,7 +532,8 @@ export class GeminiApiClient {
 		realThinkingAsContent: boolean = false,
 		originalModel?: string,
 		nativeToolsManager?: NativeToolsManager,
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		rotationAttempt: number = 0
 	): AsyncGenerator<StreamChunk> {
 		const citationsProcessor = new CitationsProcessor(this.env);
 		const response = await fetch(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:streamGenerateContent?alt=sse`, {
@@ -557,16 +558,19 @@ export class GeminiApiClient {
 					realThinkingAsContent,
 					originalModel,
 					nativeToolsManager,
-					signal
+					signal,
+					rotationAttempt
 				); // Retry once
 				return;
 			}
 
-			// Handle rate limiting and permission denied errors
+			// Handle rate limiting, permission denied, and timeout errors
 			const isRateLimited = this.autoSwitchHelper.isRateLimitStatus(response.status);
 			const isPermissionDenied = response.status === 403;
+			const isTimeout = response.status === 524;
+			const MAX_ROTATION_ATTEMPTS = 2;
 
-			if (isRateLimited || isPermissionDenied) {
+			if (isRateLimited || isPermissionDenied || isTimeout) {
 				// Try model switching for rate limit errors when possible
 				if (isRateLimited && originalModel) {
 					const fallbackModel = this.autoSwitchHelper.getFallbackModel(originalModel);
@@ -594,32 +598,37 @@ export class GeminiApiClient {
 							realThinkingAsContent,
 							originalModel,
 							nativeToolsManager,
-							signal
+							signal,
+							rotationAttempt
 						);
 						return;
 					}
 				}
 
-				// Fallback to credential pivoting for both rate limiting (when model switching isn't possible) and permission denied
-				const rotated = await this.authManager.forceNextCredential();
-				if (rotated) {
-					console.log(
-						`Got ${response.status} error, rotating to next credential and retrying`
-					);
+				// Fallback to credential pivoting for rate limiting, permission denied, and timeout errors
+				// Limit the number of rotation attempts to avoid cycling through all credentials
+				if (rotationAttempt < MAX_ROTATION_ATTEMPTS) {
+					const rotated = await this.authManager.forceNextCredential();
+					if (rotated) {
+						console.log(
+							`Got ${response.status} error, rotating to next credential (attempt ${rotationAttempt + 1} of ${MAX_ROTATION_ATTEMPTS}) and retrying`
+						);
 
-					// Retry with the same original request but with new credential
-					yield* this.performStreamRequest(
-						streamRequest,
-						needsThinkingClose,
-						true,
-						realThinkingAsContent,
-						originalModel,
-						nativeToolsManager,
-						signal
-					);
-					return;
+						// Retry with the same original request but with new credential
+						yield* this.performStreamRequest(
+							streamRequest,
+							needsThinkingClose,
+							true,
+							realThinkingAsContent,
+							originalModel,
+							nativeToolsManager,
+							signal,
+							rotationAttempt + 1
+						);
+						return;
+					}
 				}
-				// If rotation failed, we'll fall through to throw the original error
+				// If rotation failed or max attempts reached, we'll fall through to throw the original error
 			}
 
 			const errorText = await response.text();
