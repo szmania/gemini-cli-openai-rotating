@@ -535,6 +535,8 @@ export class GeminiApiClient {
 		signal?: AbortSignal,
 		rotationAttempt: number = 0
 	): AsyncGenerator<StreamChunk> {
+		console.log("Making Gemini API request with model:", (streamRequest as { model: string }).model);
+		console.log("Full Gemini API request payload:", JSON.stringify(streamRequest, null, 2));
 		const citationsProcessor = new CitationsProcessor(this.env);
 		const response = await fetch(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:streamGenerateContent?alt=sse`, {
 			method: "POST",
