@@ -81,15 +81,22 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 		const tools = body.tools;
 		const tool_choice = body.tool_choice;
 
-		console.log("Request body parsed:", {
-			model,
-			messageCount: messages.length,
-			stream,
-			includeReasoning,
-			thinkingBudget,
-			tools,
-			tool_choice
-		});
+		console.log(
+			"Request body parsed:",
+			JSON.stringify(
+				{
+					model,
+					messageCount: messages.length,
+					stream,
+					includeReasoning,
+					thinkingBudget,
+					tools,
+					tool_choice
+				},
+				null,
+				2
+			)
+		);
 
 		if (!messages.length) {
 			return c.json({ error: "messages is a required field" }, 400);
