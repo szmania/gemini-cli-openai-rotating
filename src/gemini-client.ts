@@ -330,7 +330,7 @@ export class GeminiApiClient {
 		signal?: AbortSignal
 	): AsyncGenerator<StreamChunk> {
 		await this.authManager.initializeAuth();
-		const projectId = await this.discoverProjectId();
+		// Project ID will be discovered inside performStreamRequest for each attempt
 
 		const contents = messages.map((msg) => this.messageToGeminiFormat(msg));
 
@@ -392,7 +392,6 @@ export class GeminiApiClient {
 
 		const streamRequest: {
 			model: string;
-			project: string;
 			request: {
 				contents: unknown;
 				generationConfig: unknown;
@@ -402,7 +401,6 @@ export class GeminiApiClient {
 			};
 		} = {
 			model: modelId,
-			project: projectId,
 			request: {
 				contents: contents,
 				generationConfig,
@@ -533,11 +531,13 @@ export class GeminiApiClient {
 		originalModel?: string,
 		nativeToolsManager?: NativeToolsManager,
 		signal?: AbortSignal,
-		rotationAttempt: number = 0
+		rotationAttempt: number = 0,
+		failedProjects: string[] = []
 	): AsyncGenerator<StreamChunk> {
+		const projectId = await this.discoverProjectId();
+		(streamRequest as any).project = projectId;
 		const model = (streamRequest as { model: string }).model;
-		const project = (streamRequest as { project: string }).project;
-		console.log(`Making Gemini API request with model: ${model} on project: ${project}`);
+		console.log(`Making Gemini API request with model: ${model} on project: ${projectId}`);
 		console.log("Full Gemini API request payload:", JSON.stringify(streamRequest, null, 2));
 		const citationsProcessor = new CitationsProcessor(this.env);
 		const response = await fetch(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:streamGenerateContent?alt=sse`, {
@@ -603,7 +603,8 @@ export class GeminiApiClient {
 							originalModel,
 							nativeToolsManager,
 							signal,
-							rotationAttempt
+							rotationAttempt,
+							failedProjects
 						);
 						return;
 					}
@@ -617,6 +618,9 @@ export class GeminiApiClient {
 						console.log(
 							`Got ${response.status} error, rotating to next credential (attempt ${rotationAttempt + 1} of ${MAX_ROTATION_ATTEMPTS}) and retrying`
 						);
+						
+						// Track failed projects for permission errors
+						const newFailedProjects = isPermissionDenied ? [...failedProjects, projectId] : failedProjects;
 
 						// Retry with the same original request but with new credential
 						yield* this.performStreamRequest(
@@ -627,7 +631,8 @@ export class GeminiApiClient {
 							originalModel,
 							nativeToolsManager,
 							signal,
-							rotationAttempt + 1
+							rotationAttempt + 1,
+							newFailedProjects
 						);
 						return;
 					}
@@ -643,8 +648,9 @@ export class GeminiApiClient {
 
 			// Provide more specific error for 403 Forbidden
 			if (response.status === 403) {
-				const projectId = (streamRequest as { project: string }).project;
-				const finalErrorMessage = `Stream request failed: 403 Forbidden. This indicates a permission issue with project '${projectId}'. Please ensure the active service account has the 'Vertex AI User' role in this Google Cloud project. Attempted credential rotation but the issue persists.`;
+				const allFailedProjects = [...failedProjects, (streamRequest as { project: string }).project];
+				const uniqueFailedProjects = [...new Set(allFailedProjects)];
+				const finalErrorMessage = `Stream request failed: 403 Forbidden. This indicates a permission issue with project(s): '${uniqueFailedProjects.join(", ")}'. Please ensure the active service account(s) have the 'Vertex AI User' role in the respective Google Cloud project(s). Attempted credential rotation but the issue persists.`;
 				console.error(`[GeminiAPI] ${finalErrorMessage}`, errorText);
 				throw new Error(finalErrorMessage);
 			}
