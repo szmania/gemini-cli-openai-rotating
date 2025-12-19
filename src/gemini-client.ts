@@ -535,7 +535,9 @@ export class GeminiApiClient {
 		signal?: AbortSignal,
 		rotationAttempt: number = 0
 	): AsyncGenerator<StreamChunk> {
-		console.log("Making Gemini API request with model:", (streamRequest as { model: string }).model);
+		const model = (streamRequest as { model: string }).model;
+		const project = (streamRequest as { project: string }).project;
+		console.log(`Making Gemini API request with model: ${model} on project: ${project}`);
 		console.log("Full Gemini API request payload:", JSON.stringify(streamRequest, null, 2));
 		const citationsProcessor = new CitationsProcessor(this.env);
 		const response = await fetch(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:streamGenerateContent?alt=sse`, {
@@ -570,7 +572,7 @@ export class GeminiApiClient {
 			const isRateLimited = this.autoSwitchHelper.isRateLimitStatus(response.status);
 			const isPermissionDenied = response.status === 403;
 			const isTimeout = response.status === 524;
-			const MAX_ROTATION_ATTEMPTS = 2;
+			const MAX_ROTATION_ATTEMPTS = 3;
 
 			if (isRateLimited || isPermissionDenied || isTimeout) {
 				// Try model switching for rate limit errors when possible
@@ -638,6 +640,15 @@ export class GeminiApiClient {
 				console.log("Stream request was aborted by the client.");
 				return; // Don't throw an error, just stop the generator.
 			}
+
+			// Provide more specific error for 403 Forbidden
+			if (response.status === 403) {
+				const projectId = (streamRequest as { project: string }).project;
+				const finalErrorMessage = `Stream request failed: 403 Forbidden. This indicates a permission issue with project '${projectId}'. Please ensure the active service account has the 'Vertex AI User' role in this Google Cloud project. Attempted credential rotation but the issue persists.`;
+				console.error(`[GeminiAPI] ${finalErrorMessage}`, errorText);
+				throw new Error(finalErrorMessage);
+			}
+
 			console.error(`[GeminiAPI] Stream request failed: ${response.status}`, errorText);
 			throw new Error(`Stream request failed: ${response.status}`);
 		}
@@ -729,7 +740,7 @@ type: "thinking_content",
 							}
 						}
 					}
-					// Handle regular content - only if it's not a thinking part and doesn't contain <think> tags
+					// Handle regular content - only if it's not a thinking partand doesn't contain <think> tags
 					else if (part.text && !part.thought &&!part.text.includes("<think>")) {
 						// Close thinking tag before first real content if needed
 						if ((needsThinkingClose || (realThinkingAsContent && hasStartedThinking)) && !hasClosedThinking) {
