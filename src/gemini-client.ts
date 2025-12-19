@@ -921,6 +921,8 @@ type: "thinking_content",
 			delete data.strict;
 			delete data.exclusiveMinimum;
 			delete data.exclusiveMaximum;
+			delete data.$defs;
+			delete data.$ref;
 			
 			// Recursively process nested objects/arrays
 			for (const key in data) {
