@@ -576,11 +576,11 @@ export class GeminiApiClient {
 
 			if (isRateLimited || isPermissionDenied || isTimeout) {
 				// Try model switching for rate limit errors when possible
-				if (isRateLimited && originalModel) {
+				if ((isRateLimited || isTimeout) && originalModel) {
 					const fallbackModel = this.autoSwitchHelper.getFallbackModel(originalModel);
 					if (fallbackModel && this.autoSwitchHelper.isEnabled()) {
 						console.log(
-							`Got ${response.status} error for model ${originalModel}, switching to fallback model: ${fallbackModel}`
+							`Got ${response.status} error (rate limit or timeout) for model ${originalModel}, switching to fallback model: ${fallbackModel}`
 						);
 
 						// Create new request with fallback model
