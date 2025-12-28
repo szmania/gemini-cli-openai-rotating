@@ -46,6 +46,12 @@ export class AuthManager {
 
 	constructor(env: Env) {
 		this.env = env;
+		// Load credentials from environment variables on construction
+		this.credentials = Array.from({ length: 100 })
+			.map((_, i) => {
+				return (this.env[("GCP_SERVICE_ACCOUNT_" + i) as keyof Env] ?? "") as string;
+			})
+			.filter((s) => s.length > 0);
 	}
 
 	/**
@@ -107,12 +113,6 @@ export class AuthManager {
 	}
 
 	public async rotateCredentials() {
-		this.credentials = Array.from({ length: 100 })
-			.map((_, i) => {
-				return (this.env[("GCP_SERVICE_ACCOUNT_" + i) as keyof Env] ?? "") as string;
-			})
-			.filter((s) => s.length > 0);
-
 		this.credsIndex = Math.min(
 			parseInt((await this.env.GEMINI_CLI_KV.get(KV_CREDS_INDEX, "text").catch(() => "0")) ?? "0"),
 			this.credentials.length - 1
@@ -273,15 +273,6 @@ export class AuthManager {
 	 * @returns Promise<boolean> indicating if rotation was successful
 	 */
 	public async forceNextCredential(): Promise<boolean> {
-		// Ensure credentials array is populated
-		if (this.credentials.length === 0) {
-			this.credentials = Array.from({ length: 100 })
-				.map((_, i) => {
-					return (this.env[("GCP_SERVICE_ACCOUNT_" + i) as keyof Env] ?? "") as string;
-				})
-				.filter((s) => s.length > 0);
-		}
-
 		// If we only have one credential or none, we can't rotate
 		if (this.credentials.length <= 1) {
 			console.log("Cannot rotate credentials: only one or no credentials available");
