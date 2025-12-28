@@ -615,14 +615,19 @@ export class GeminiApiClient {
 				// Fallback to credential pivoting for rate limiting, permission denied, and timeout errors
 				// Limit the number of rotation attempts to avoid cycling through all credentials
 				if (rotationAttempt < MAX_ROTATION_ATTEMPTS) {
-					const rotated = await this.authManager.forceNextCredential(projectId);
+					const oldProjectId = projectId;
+					const rotated = await this.authManager.forceNextCredential(oldProjectId);
 					if (rotated) {
+						// Clear the cached project ID to force rediscovery with the new credential
+						this.projectId = null;
+						const newProjectId = await this.discoverProjectId();
+						
 						console.log(
-							`Got ${response.status} error, rotating to next credential (attempt ${rotationAttempt + 1} of ${MAX_ROTATION_ATTEMPTS}) and retrying`
+							`Got ${response.status} error on project '${oldProjectId}', rotating to project '${newProjectId}' (attempt ${rotationAttempt + 1} of ${MAX_ROTATION_ATTEMPTS}) and retrying`
 						);
 						
-						// Track failed projects for permission errors
-						const newFailedProjects = isPermissionDenied ? [...failedProjects, projectId] : failedProjects;
+						// Track failed projects for permission errors (using the old project ID that actually failed)
+						const newFailedProjects = isPermissionDenied ? [...failedProjects, oldProjectId] : failedProjects;
 
 						// Retry with the same original request but with new credential
 						yield* this.performStreamRequest(
