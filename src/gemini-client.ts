@@ -538,7 +538,9 @@ export class GeminiApiClient {
 		(streamRequest as any).project = projectId;
 		const model = (streamRequest as { model: string }).model;
 		console.log(`Making Gemini API request with model: ${model} on project: ${projectId}`);
-		console.log("Full Gemini API request payload:", JSON.stringify(streamRequest, null, 2));
+		const payloadString = JSON.stringify(streamRequest, null, 2);
+		const truncatedPayload = payloadString.length > 5000 ? payloadString.substring(0, 5000) + "..." : payloadString;
+		console.log("Full Gemini API request payload (truncated):", truncatedPayload);
 		const citationsProcessor = new CitationsProcessor(this.env);
 		const response = await fetch(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:streamGenerateContent?alt=sse`, {
 			method: "POST",
