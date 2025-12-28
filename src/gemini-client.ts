@@ -615,7 +615,7 @@ export class GeminiApiClient {
 				// Fallback to credential pivoting for rate limiting, permission denied, and timeout errors
 				// Limit the number of rotation attempts to avoid cycling through all credentials
 				if (rotationAttempt < MAX_ROTATION_ATTEMPTS) {
-					const rotated = await this.authManager.forceNextCredential();
+					const rotated = await this.authManager.forceNextCredential(projectId);
 					if (rotated) {
 						console.log(
 							`Got ${response.status} error, rotating to next credential (attempt ${rotationAttempt + 1} of ${MAX_ROTATION_ATTEMPTS}) and retrying`

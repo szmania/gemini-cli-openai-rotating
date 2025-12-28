@@ -270,15 +270,19 @@ export class AuthManager {
 	/**
 	 * Forces rotation to the next available credential and re-initializes authentication.
 	 * This is used for retrying requests with a different account when one is rate-limited.
+	 * @param failedProjectId Optional project ID that failed, for enhanced logging
 	 * @returns Promise<boolean> indicating if rotation was successful
 	 */
-	public async forceNextCredential(): Promise<boolean> {
+	public async forceNextCredential(failedProjectId?: string): Promise<boolean> {
 		// If we only have one credential or none, we can't rotate
 		if (this.credentials.length <= 1) {
 			console.log("Cannot rotate credentials: only one or no credentials available");
 			return false;
 		}
 
+		// Store current index for logging
+		const oldCredsIndex = this.credsIndex;
+		
 		// Calculate the next credential index
 		const nextCredsIndex = (this.credsIndex + 1) % this.credentials.length;
 		
@@ -293,7 +297,12 @@ export class AuthManager {
 		this.accessToken = null;
 		await this.initializeAuth();
 		
-		console.log(`Successfully rotated to credential index ${nextCredsIndex}`);
+		// Enhanced logging with project ID if provided
+		if (failedProjectId) {
+			console.log(`Rotated from credential index ${oldCredsIndex} (project: ${failedProjectId}) to index ${nextCredsIndex}`);
+		} else {
+			console.log(`Successfully rotated to credential index ${nextCredsIndex}`);
+		}
 		return true;
 	}
 }
