@@ -574,7 +574,8 @@ export class GeminiApiClient {
 			const isRateLimited = this.autoSwitchHelper.isRateLimitStatus(response.status);
 			const isPermissionDenied = response.status === 403;
 			const isTimeout = response.status === 524;
-			const MAX_ROTATION_ATTEMPTS = 3;
+			const totalCredentials = this.authManager.getCredentialCount();
+			const maxRotations = totalCredentials > 1 ? totalCredentials - 1 : 0;
 
 			if (isRateLimited || isPermissionDenied || isTimeout) {
 				// Try model switching for rate limit errors when possible
@@ -614,7 +615,7 @@ export class GeminiApiClient {
 
 				// Fallback to credential pivoting for rate limiting, permission denied, and timeout errors
 				// Limit the number of rotation attempts to avoid cycling through all credentials
-				if (rotationAttempt < MAX_ROTATION_ATTEMPTS) {
+				if (rotationAttempt < maxRotations) {
 					const oldProjectId = projectId;
 					const rotated = await this.authManager.forceNextCredential(oldProjectId);
 					if (rotated) {
@@ -623,7 +624,7 @@ export class GeminiApiClient {
 						const newProjectId = await this.discoverProjectId();
 						
 						console.log(
-							`Got ${response.status} error on project '${oldProjectId}', rotating to project '${newProjectId}' (attempt ${rotationAttempt + 1} of ${MAX_ROTATION_ATTEMPTS}) and retrying`
+							`Got ${response.status} error on project '${oldProjectId}', rotating to project '${newProjectId}' (attempt ${rotationAttempt + 1} of ${maxRotations}) and retrying`
 						);
 						
 						// Track failed projects for permission errors (using the old project ID that actually failed)

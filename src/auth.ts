@@ -305,4 +305,11 @@ export class AuthManager {
 		}
 		return true;
 	}
+
+	/**
+	 * Get the total number of available credentials.
+	 */
+	public getCredentialCount(): number {
+		return this.credentials.length;
+	}
 }
