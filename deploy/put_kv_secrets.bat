@@ -67,10 +67,14 @@ for %%a in (%ACCOUNTS%) do (
             :: Calculate the hash of the new value
             :: We need a temp file because certutil works on files
             set "TEMP_SECRET_FILE=%TEMP%\secret.tmp"
-            (echo|set /p="!value!") > "!TEMP_SECRET_FILE!"
-            
+            powershell -Command "Set-Content -Path '!TEMP_SECRET_FILE!' -Value $env:value -NoNewline -Encoding UTF8"
+            if !errorlevel! neq 0 (
+                echo ❌ Failed to write secret to temp file for key '!key!'.
+                exit /b 1
+            )
+    
             set "new_hash="
-            for /f "delims=" %%h in ('certutil -hashfile "!TEMP_SECRET_FILE!" SHA256 ^| findstr /v /i "sha256"') do (
+            for /f "delims=" %%h in ('powershell -Command "(Get-FileHash -Path '!TEMP_SECRET_FILE!' -Algorithm SHA256).Hash.ToLower()"') do (
                 set "new_hash=%%h"
             )
             del "!TEMP_SECRET_FILE!" >nul 2>nul
@@ -89,7 +93,7 @@ for %%a in (%ACCOUNTS%) do (
             ) else (
                 echo     - 🔄 Hash differs. Uploading new secret for '!key!'...
                 :: Use wrangler secret put, passing the value via stdin for safety
-                (echo !value!) | cfman wrangler --account %%a secret put "!key!"
+                powershell -Command "$env:value | cfman wrangler --account %%a secret put '!key!'"
                 if !errorlevel! neq 0 (
                     echo ❌ Failed to upload secret for key '!key!'.
                     exit /b 1
