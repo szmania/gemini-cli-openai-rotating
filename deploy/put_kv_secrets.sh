@@ -52,17 +52,14 @@ for account in "${ACCOUNTS[@]}"; do
     echo "🚀 Syncing secrets for Account: $account..."
 
     # Read .dev.vars, filter out comments and empty lines, and process each secret
-    while IFS='=' read -r key value || [[ -n "$key" ]]; do
-        # Skip empty lines and comments
-        if [[ -z "$key" ]] || [[ "$key" =~ ^\s*# ]]; then
-            continue
-        fi
-
-        # Trim leading/trailing whitespace from the key
-        key=$(echo "$key" | xargs)
-
-        # Trim leading/trailing whitespace and remove quotes from the value
-        value=$(echo "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//')
+    # First, filter out comments and empty lines
+    grep -v '^\s*$\|^\s*\#' "$DEV_VARS_FILE" | while IFS= read -r line; do
+        # Extract key and value
+        key=$(echo "$line" | cut -d '=' -f 1 | xargs)
+        value=$(echo "$line" | cut -d '=' -f 2-)
+        
+        # Log which key is being processed
+        echo "  - Processing secret for key: '$key'..."
 
         if [ -n "$key" ]; then
             # Calculate the hash of the new value
@@ -74,18 +71,18 @@ for account in "${ACCOUNTS[@]}"; do
 
             # Compare hashes
             if [ "$new_hash" == "$old_hash" ]; then
-                echo "  - ✅ Secret '$key' is already up-to-date. Skipping."
+                echo "    - ✅ Hash matches. Secret '$key' is up-to-date."
             else
-                echo "  - 🔄 Secret '$key' has changed. Uploading new value..."
+                echo "    - 🔄 Hash differs. Uploading new secret for '$key'..."
                 # Use wrangler secret put, passing the value via stdin for safety
                 echo "$value" | cfman wrangler --account "$account" secret put "$key"
 
                 # Update the hash in KV storage for the new value
-                echo "  - 💾 Updating hash for '$key' in KV storage."
+                echo "    - 💾 Updating hash for '$key' in KV storage."
                 cfman wrangler --account "$account" kv:key put "$kv_key" "$new_hash"
             fi
         fi
-    done < "$DEV_VARS_FILE"
+    done
 
     echo "✅ Secret sync completed for Account: $account."
     echo "----------------------------------------"
