@@ -17,7 +17,7 @@ if ! command -v cfman &> /dev/null; then
 fi
 
 # 2. Load environment variables from .dev.vars file in the project root
-ENV_FILE="../.dev.vars"
+ENV_FILE="../.env"
 if [ -f "$ENV_FILE" ]; then
     # Load variables, ignoring comments and empty lines
     export $(grep -v '^#' "$ENV_FILE" | xargs)
