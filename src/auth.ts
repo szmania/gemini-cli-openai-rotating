@@ -61,6 +61,12 @@ export class AuthManager {
 		if (this.credentials.length == 0)
 			throw new Error("`GCP_SERVICE_ACCOUNT_*` environment variable not set. Please provide OAuth2 credentials JSON.");
 
+		// Get the current credential index from KV storage
+		this.credsIndex = Math.min(
+			parseInt((await this.env.GEMINI_CLI_KV.get(KV_CREDS_INDEX, "text").catch(() => "0")) ?? "0"),
+			this.credentials.length - 1
+		);
+
 		// Parse original credentials from environment.
 		const oauth2Creds: OAuth2Credentials = JSON.parse(this.credentials[this.credsIndex]);
 		this.credsHash = hashString(oauth2Creds.id_token);
@@ -110,20 +116,6 @@ export class AuthManager {
 			console.error("Failed to initialize authentication:", e);
 			throw new Error("Authentication failed: " + errorMessage);
 		}
-	}
-
-	public async rotateCredentials() {
-		this.credsIndex = Math.min(
-			parseInt((await this.env.GEMINI_CLI_KV.get(KV_CREDS_INDEX, "text").catch(() => "0")) ?? "0"),
-			this.credentials.length - 1
-		);
-
-		console.log(this.credsIndex);
-
-		let nextCredsIndex = this.credsIndex + 1;
-		if (nextCredsIndex > this.credentials.length - 1) nextCredsIndex = 0;
-		console.log("Rotated credentials to", nextCredsIndex);
-		await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, nextCredsIndex.toString());
 	}
 
 	/**
@@ -282,21 +274,20 @@ export class AuthManager {
 
 		// Store current index for logging
 		const oldCredsIndex = this.credsIndex;
-		
+
 		// Calculate the next credential index
 		const nextCredsIndex = (this.credsIndex + 1) % this.credentials.length;
-		
-		// Update current index
+
+		// Update KV store to point to the new credential for the next request cycle
+		await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, nextCredsIndex.toString());
+
+		// Update current index for this request's retry
 		this.credsIndex = nextCredsIndex;
-		
-		// Update KV store to point to the following credential for the next request
-		const followingIndex = (nextCredsIndex + 1) % this.credentials.length;
-		await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, followingIndex.toString());
-		
+
 		// Reset access token and re-initialize auth with new credential
 		this.accessToken = null;
 		await this.initializeAuth();
-		
+
 		// Enhanced logging with project ID if provided
 		if (failedProjectId) {
 			console.log(`Rotated from credential index ${oldCredsIndex} (project: ${failedProjectId}) to index ${nextCredsIndex}`);
