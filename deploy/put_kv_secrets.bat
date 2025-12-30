@@ -56,7 +56,7 @@ for %%a in (%ACCOUNTS%) do (
     echo 🚀 Syncing secrets for Account: %%a...
 
     :: Read .dev.vars, filter out comments and empty lines, and process each secret
-    for /f "usebackq tokens=1,* delims==" %%k in ('findstr /v /r /c:"^[[:space:]]*#" /c:"^[[:space:]]*$" "%DEV_VARS_FILE%"') do (
+    for /f "usebackq tokens=1,* delims==" %%k in (`findstr /v /r /c:"^#" /c:"^$" "%DEV_VARS_FILE%"`) do (
         set "key=%%k"
         set "value=%%l"
 
