@@ -4,14 +4,16 @@
 # It exits immediately if any command fails.
 set -e
 
-# --- Configuration ---
-# ❗️ Replace these placeholder values with your actual Cloudflare API tokens.
-# You can create these tokens in the Cloudflare Dashboard:
-# My Profile > API Tokens > Create Token (use the "Edit Cloudflare Workers" template).
+# --- Pre-flight Check ---
+if [ -z "$API_TOKEN_ACCOUNT_ONE" ]; then
+    echo "❌ Error: API_TOKEN_ACCOUNT_ONE environment variable is not set."
+    exit 1
+fi
 
-API_TOKEN_ACCOUNT_ONE="PASTE_YOUR_API_TOKEN_FOR_ACCOUNT_ONE_HERE"
-API_TOKEN_ACCOUNT_TWO="PASTE_YOUR_API_TOKEN_FOR_ACCOUNT_TWO_HERE"
-
+if [ -z "$API_TOKEN_ACCOUNT_TWO" ]; then
+    echo "❌ Error: API_TOKEN_ACCOUNT_TWO environment variable is not set."
+    exit 1
+fi
 
 # --- Deployment to Account One ---
 echo "🚀 Deploying to Account One..."

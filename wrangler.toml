@@ -24,3 +24,23 @@ port = 8787             # Port for local development server
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
 enabled = true
+
+# --- Environment for Account One ---
+[env.account-one]
+# ❗️ Replace with the Account ID for your first Cloudflare account
+account_id = "YOUR_ACCOUNT_ONE_ID" 
+
+kv_namespaces = [
+  # ❗️ Replace with the KV Namespace ID from your first account
+  { binding = "GEMINI_CLI_KV", id = "YOUR_KV_ID_FOR_ACCOUNT_ONE" } 
+]
+
+# --- Environment for Account Two ---
+[env.account-two]
+# ❗️ Replace with the Account ID for your second Cloudflare account
+account_id = "YOUR_ACCOUNT_TWO_ID"
+
+kv_namespaces = [
+  # ❗️ Replace with the KV Namespace ID from your second account
+  { binding = "GEMINI_CLI_KV", id = "YOUR_KV_ID_FOR_ACCOUNT_TWO" }
+]

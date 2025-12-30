@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
+    "deploy:acc1": "wrangler deploy --env account-one",
+    "deploy:acc2": "wrangler deploy --env account-two",
     "dev": "wrangler dev",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
