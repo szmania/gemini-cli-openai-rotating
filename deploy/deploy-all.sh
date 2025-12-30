@@ -13,21 +13,39 @@ if ! command -v cfman &> /dev/null; then
     exit 1
 fi
 
-# --- Deployment to Account One ---
-echo "🚀 Deploying to Account One..."
+# Load environment variables from .env file in the project root
+ENV_FILE="../.env"
+if [ -f "$ENV_FILE" ]; then
+    export $(cat "$ENV_FILE" | xargs)
+else
+    echo "Error: $ENV_FILE file not found."
+    exit 1
+fi
 
-# This command now uses the updated script from package.json,
-# which leverages cfman to handle authentication.
-npm run deploy:acc1
+# Check for required environment variables
+if [ -z "$CF_ACCOUNT_ONE_ALIAS" ] || [ -z "$CF_ACCOUNT_TWO_ALIAS" ]; then
+    echo "Error: CF_ACCOUNT_ONE_ALIAS and/or CF_ACCOUNT_TWO_ALIAS not set in $ENV_FILE"
+    echo "Please add the following lines to $ENV_FILE:"
+    echo "CF_ACCOUNT_ONE_ALIAS=your_account_one_alias"
+    echo "CF_ACCOUNT_TWO_ALIAS=your_account_two_alias"
+    exit 1
+fi
+
+# --- Deployment to Account One ---
+echo "🚀 Deploying to Account One ($CF_ACCOUNT_ONE_ALIAS)..."
+
+# Direct cfman deployment using environment variable
+cfman wrangler --account "$CF_ACCOUNT_ONE_ALIAS" deploy --env "$CF_ACCOUNT_ONE_ALIAS"
 
 echo "✅ Successfully deployed to Account One."
 echo "----------------------------------------"
 
 
 # --- Deployment to Account Two ---
-echo "🚀 Deploying to Account Two..."
+echo "🚀 Deploying to Account Two ($CF_ACCOUNT_TWO_ALIAS)..."
 
-npm run deploy:acc2
+# Direct cfman deployment using environment variable
+cfman wrangler --account "$CF_ACCOUNT_TWO_ALIAS" deploy --env "$CF_ACCOUNT_TWO_ALIAS"
 
 echo "✅ Successfully deployed to Account Two."
 echo "----------------------------------------"
