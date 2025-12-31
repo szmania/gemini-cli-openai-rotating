@@ -140,3 +140,6 @@ dist
 .idea/*
 .aider*
 debug/*
+
+wrangler_pditty8811.toml
+wrangler_szmania.toml
