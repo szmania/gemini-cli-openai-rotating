@@ -143,17 +143,23 @@ export class AuthManager {
 			throw new Error(`Token refresh failed: ${errorText}`);
 		}
 
-		const refreshData = (await refreshResponse.json()) as TokenRefreshResponse;
-		this.accessToken = refreshData.access_token;
+		const responseText = await refreshResponse.text();
+		try {
+			const refreshData = JSON.parse(responseText) as TokenRefreshResponse;
+			this.accessToken = refreshData.access_token;
 
-		// Calculate expiry time (typically 1 hour from now)
-		const expiryTime = Date.now() + refreshData.expires_in * 1000;
+			// Calculate expiry time (typically 1 hour from now)
+			const expiryTime = Date.now() + refreshData.expires_in * 1000;
 
-		console.log("Token refreshed successfully");
-		console.log(`New token expires in ${refreshData.expires_in} seconds`);
+			console.log("Token refreshed successfully");
+			console.log(`New token expires in ${refreshData.expires_in} seconds`);
 
-		// Cache the new token in KV storage
-		await this.cacheTokenInKV(refreshData.access_token, expiryTime);
+			// Cache the new token in KV storage
+			await this.cacheTokenInKV(refreshData.access_token, expiryTime);
+		} catch (e) {
+			console.error("Failed to parse token refresh response JSON. Body:", responseText);
+			throw e;
+		}
 	}
 
 	/**
