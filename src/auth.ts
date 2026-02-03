@@ -58,78 +58,75 @@ export class AuthManager {
 	 * Initializes authentication using OAuth2 credentials with KV storage caching.
 	 */
 	public async initializeAuth(): Promise<void> {
-		if (this.credentials.length == 0)
+		if (this.credentials.length === 0) {
 			throw new Error("`GCP_SERVICE_ACCOUNT_*` environment variable not set. Please provide OAuth2 credentials JSON.");
+		}
 
-		// Get the current credential index from KV storage
-		this.credsIndex = Math.min(
+		const initialCredsIndex = Math.min(
 			parseInt((await this.env.GEMINI_CLI_KV.get(KV_CREDS_INDEX, "text").catch(() => "0")) ?? "0"),
 			this.credentials.length - 1
 		);
 
-		// Parse original credentials from environment.
-		const oauth2Creds: OAuth2Credentials = JSON.parse(this.credentials[this.credsIndex]);
-		this.credsHash = hashString(oauth2Creds.id_token);
-
-		try {
-			// First, try to get a cached token from KV storage
-			let cachedTokenData = null;
+		for (let i = 0; i < this.credentials.length; i++) {
+			this.credsIndex = (initialCredsIndex + i) % this.credentials.length;
+			console.log(`Attempting to authenticate with credential index ${this.credsIndex}...`);
+			const currentCredential = this.credentials[this.credsIndex];
 
 			try {
-				const cachedToken = await this.env.GEMINI_CLI_KV.get(`${KV_TOKEN_KEY}_${this.credsHash}`, "json");
+				const oauth2Creds: OAuth2Credentials = JSON.parse(currentCredential);
+				this.credsHash = hashString(oauth2Creds.id_token);
+
+				// Try to get a cached token
+				const cachedToken = await this.env.GEMINI_CLI_KV.get(`${KV_TOKEN_KEY}_${this.credsHash}`, "json").catch(() => null);
 				if (cachedToken) {
-					cachedTokenData = cachedToken as CachedTokenData;
-					console.log("Found cached token in KV storage");
+					const cachedTokenData = cachedToken as CachedTokenData;
+					const timeUntilExpiry = cachedTokenData.expiry_date - Date.now();
+					if (timeUntilExpiry > TOKEN_BUFFER_TIME) {
+						this.accessToken = cachedTokenData.access_token;
+						console.log(`Using cached token for credential index ${this.credsIndex}, valid for ${Math.floor(timeUntilExpiry / 1000)} more seconds`);
+						await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, this.credsIndex.toString()); // Save the working index
+						return; // Success
+					}
+					console.log(`Cached token for credential index ${this.credsIndex} expired or expiring soon`);
 				}
-			} catch (kvError) {
-				console.log("No cached token found in KV storage or KV error:", kvError);
-			}
 
-			// Check if cached token is still valid (with buffer)
-			if (cachedTokenData) {
-				const timeUntilExpiry = cachedTokenData.expiry_date - Date.now();
+				// Check if the original token is still valid
+				const timeUntilExpiry = oauth2Creds.expiry_date - Date.now();
 				if (timeUntilExpiry > TOKEN_BUFFER_TIME) {
-					this.accessToken = cachedTokenData.access_token;
-					console.log(`Using cached token, valid for ${Math.floor(timeUntilExpiry / 1000)} more seconds`);
-					return;
+					this.accessToken = oauth2Creds.access_token;
+					console.log(`Original token for credential index ${this.credsIndex} is valid for ${Math.floor(timeUntilExpiry / 1000)} more seconds`);
+					await this.cacheTokenInKV(oauth2Creds.access_token, oauth2Creds.expiry_date);
+					await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, this.credsIndex.toString()); // Save the working index
+					return; // Success
 				}
-				console.log("Cached token expired or expiring soon");
+
+				// Both original and cached tokens are expired, refresh the token
+				console.log(`All tokens for credential index ${this.credsIndex} expired, refreshing...`);
+				await this.refreshAndCacheToken(oauth2Creds.refresh_token);
+				await this.env.GEMINI_CLI_KV.put(KV_CREDS_INDEX, this.credsIndex.toString()); // Save the working index
+				console.log(`Successfully authenticated with credential index ${this.credsIndex}`);
+				return; // Success
+			} catch (e: unknown) {
+				const errorMessage = e instanceof Error ? e.message : String(e);
+				console.error(`Authentication failed for credential index ${this.credsIndex}: ${errorMessage}`);
+				if (i < this.credentials.length - 1) {
+					console.log("Trying next credential...");
+				}
 			}
-
-			// Check if the original token is still valid
-			const timeUntilExpiry = oauth2Creds.expiry_date - Date.now();
-			if (timeUntilExpiry > TOKEN_BUFFER_TIME) {
-				// Original token is still valid, cache it and use it
-				this.accessToken = oauth2Creds.access_token;
-				console.log(`Original token is valid for ${Math.floor(timeUntilExpiry / 1000)} more seconds`);
-
-				// Cache the token in KV storage
-				await this.cacheTokenInKV(oauth2Creds.access_token, oauth2Creds.expiry_date);
-				return;
-			}
-
-			// Both original and cached tokens are expired, refresh the token
-			console.log("All tokens expired, refreshing...");
-			await this.refreshAndCacheToken(oauth2Creds.refresh_token);
-		} catch (e: unknown) {
-			const errorMessage = e instanceof Error ? e.message : String(e);
-			console.error("Failed to initialize authentication:", e);
-			throw new Error("Authentication failed: " + errorMessage);
 		}
+
+		// If we get here, all credentials failed
+		throw new Error("Authentication failed for all available credentials.");
 	}
 
 	/**
-	 * Refresh the OAuth token and cache it in KV storage.
+	 * Refresh the OAuth2 token and cache it in KV storage.
 	 */
 	private async refreshAndCacheToken(refreshToken: string): Promise<void> {
-		console.log("Refreshing OAuth token...");
-
 		const refreshResponse = await fetch(OAUTH_REFRESH_URL, {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded"
-			},
-			body: new URLSearchParams({
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
 				client_id: OAUTH_CLIENT_ID,
 				client_secret: OAUTH_CLIENT_SECRET,
 				refresh_token: refreshToken,
