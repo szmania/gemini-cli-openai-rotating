@@ -948,6 +948,20 @@ type: "thinking_content",
 			delete data.exclusiveMaximum;
 			delete data.$defs;
 			delete data.$ref;
+			// Also remove other complex schema fields that might be unsupported
+			delete data.anyOf;
+			delete data.oneOf;
+			delete data.allOf;
+			delete data.format;
+
+			// Handle union types (e.g., ["string", "null"] or ["string", "number"]),
+			// which Gemini rejects. We'll pick the first non-null type.
+			if (Array.isArray(data.type)) {
+				const firstType = data.type.find((t: any) => t !== "null");
+				if (firstType) {
+					data.type = firstType;
+				}
+			}
 			
 			// Recursively process nested objects/arrays
 			for (const key in data) {
