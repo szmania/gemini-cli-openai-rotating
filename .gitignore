@@ -140,6 +140,7 @@ dist
 .idea/*
 .aider*
 debug/*
+.cecli*
 
 wrangler_pditty8811.toml
 wrangler_szmania.toml
