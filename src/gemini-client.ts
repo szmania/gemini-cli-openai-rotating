@@ -941,6 +941,21 @@ type: "thinking_content",
 				this.sanitizeTools(item);
 			}
 		} else if (typeof data === 'object' && data !== null) {
+			// De-duplicate function declarations to prevent API errors
+			if (Array.isArray(data.functionDeclarations)) {
+				const seenNames = new Set<string>();
+				data.functionDeclarations = data.functionDeclarations.filter((func: any) => {
+					if (func && typeof func.name === 'string') {
+						if (seenNames.has(func.name)) {
+							console.warn(`[sanitizeTools] Removing duplicate function declaration: '${func.name}'`);
+							return false;
+						}
+						seenNames.add(func.name);
+					}
+					return true;
+				});
+			}
+
 			// Handle `anyOf` for nullable types by finding the first non-null type
 			if (Array.isArray(data.anyOf)) {
 				const typeDef = data.anyOf.find((def: any) => def.type && def.type !== "null");
