@@ -664,8 +664,8 @@ export class GeminiApiClient {
 			}
 
 			const project = (streamRequest as { project: string }).project;
-			const finalErrorMessage = `Stream request failed with status ${response.status} on project '${project}'. All retry, fallback, and rotation attempts have been exhausted. Full error: ${errorText}`;
-			console.error(`[GeminiAPI] ${finalErrorMessage}`);
+			const finalErrorMessage = `Stream request failed with status ${response.status} on project '${project}'. All retry, fallback, and rotation attempts have been exhausted.`;
+			console.error(`[GeminiAPI] ${finalErrorMessage}`, errorText);
 			throw new Error(finalErrorMessage);
 		}
 
