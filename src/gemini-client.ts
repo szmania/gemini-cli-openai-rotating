@@ -941,18 +941,13 @@ type: "thinking_content",
 				this.sanitizeTools(item);
 			}
 		} else if (typeof data === 'object' && data !== null) {
-			// Delete unsupported fields from the object
-			delete data.$schema;
-			delete data.strict;
-			delete data.exclusiveMinimum;
-			delete data.exclusiveMaximum;
-			delete data.$defs;
-			delete data.$ref;
-			// Also remove other complex schema fields that might be unsupported
-			delete data.anyOf;
-			delete data.oneOf;
-			delete data.allOf;
-			delete data.format;
+			// Handle `anyOf` for nullable types by finding the first non-null type
+			if (Array.isArray(data.anyOf)) {
+				const typeDef = data.anyOf.find((def: any) => def.type && def.type !== "null");
+				if (typeDef) {
+					data.type = typeDef.type;
+				}
+			}
 
 			// Handle union types (e.g., ["string", "null"] or ["string", "number"]),
 			// which Gemini rejects. We'll pick the first non-null type.
@@ -960,9 +955,17 @@ type: "thinking_content",
 				const firstType = data.type.find((t: any) => t !== "null");
 				if (firstType) {
 					data.type = firstType;
+				} else {
+					delete data.type; // Avoid leaving an empty or invalid type array
 				}
 			}
 			
+			// Delete all unsupported JSON schema fields
+			const unsupportedKeys = ['$schema', 'strict', 'exclusiveMinimum', 'exclusiveMaximum', '$defs', '$ref', 'anyOf', 'oneOf', 'allOf', 'format', 'additionalProperties'];
+			for (const key of unsupportedKeys) {
+				delete data[key];
+			}
+
 			// Recursively process nested objects/arrays
 			for (const key in data) {
 				if (data.hasOwnProperty(key)) {
