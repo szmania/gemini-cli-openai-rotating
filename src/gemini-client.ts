@@ -627,8 +627,8 @@ export class GeminiApiClient {
 							`Got ${response.status} error on project '${oldProjectId}', rotating to project '${newProjectId}' (attempt ${rotationAttempt + 1} of ${maxRotations}) and retrying`
 						);
 						
-						// Track failed projects for permission errors (using the old project ID that actually failed)
-						const newFailedProjects = isPermissionDenied ? [...failedProjects, oldProjectId] : failedProjects;
+						// Track failed projects for permission, rate limit, and timeout errors
+						const newFailedProjects = [...failedProjects, oldProjectId];
 
 						// Retry with the same original request but with new credential
 						yield* this.performStreamRequest(
@@ -654,17 +654,24 @@ export class GeminiApiClient {
 				return; // Don't throw an error, just stop the generator.
 			}
 
+			const allFailedProjects = [...new Set([...failedProjects, (streamRequest as { project: string }).project])];
+			const projectList = allFailedProjects.join("', '");
+
 			// Provide more specific error for 403 Forbidden
 			if (response.status === 403) {
-				const allFailedProjects = [...failedProjects, (streamRequest as { project: string }).project];
-				const uniqueFailedProjects = [...new Set(allFailedProjects)];
-				const finalErrorMessage = `Stream request failed: 403 Forbidden. This indicates a permission issue with project(s): '${uniqueFailedProjects.join(", ")}'. Please ensure the active service account(s) have the 'Vertex AI User' role in the respective Google Cloud project(s). Attempted credential rotation but the issue persists.`;
+				const finalErrorMessage = `Stream request failed: 403 Forbidden. This indicates a permission issue with project(s): '${projectList}'. Please ensure the active service account(s) have the 'Vertex AI User' role in the respective Google Cloud project(s). All credential rotation attempts failed to resolve the issue.`;
 				console.error(`[GeminiAPI] ${finalErrorMessage}`, errorText);
 				throw new Error(finalErrorMessage);
 			}
 
-			const project = (streamRequest as { project: string }).project;
-			const finalErrorMessage = `Stream request failed with status ${response.status} on project '${project}'. All retry, fallback, and rotation attempts have been exhausted.`;
+			// Provide more specific error for 429 Rate Limited
+			if (response.status === 429) {
+				const finalErrorMessage = `Stream request failed: 429 Too Many Requests. All available credentials were rate-limited across projects: '${projectList}'. All retry, fallback, and rotation attempts have been exhausted.`;
+				console.error(`[GeminiAPI] ${finalErrorMessage}`, errorText);
+				throw new Error(finalErrorMessage);
+			}
+
+			const finalErrorMessage = `Stream request failed with status ${response.status}. All retry, fallback, and rotation attempts have been exhausted across projects: '${projectList}'.`;
 			console.error(`[GeminiAPI] ${finalErrorMessage}`, errorText);
 			throw new Error(finalErrorMessage);
 		}
