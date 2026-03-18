@@ -657,15 +657,15 @@ export class GeminiApiClient {
 						);
 						return;
 					}
-				} else if (isRateLimited && backoffAttempt < MAX_BACKOFF_ATTEMPTS) {
-					// All credentials have been tried, now start exponential backoff for rate limit errors
+				} else if ((isRateLimited || isPermissionDenied) && backoffAttempt < MAX_BACKOFF_ATTEMPTS) {
+					// All credentials have been tried, now start exponential backoff for persistent errors
 					const delay = Math.min(
 						INITIAL_BACKOFF_DELAY_MS * 2 ** backoffAttempt + Math.random() * 1000,
 						MAX_BACKOFF_DELAY_S * 1000
 					);
 
 					console.log(
-						`All credentials rate-limited. Backing off for ${delay.toFixed(0)}ms before retrying... (Backoff attempt ${
+						`All credentials failed with ${response.status} errors. Backing off for ${delay.toFixed(0)}ms before retrying... (Backoff attempt ${
 							backoffAttempt + 1
 						}/${MAX_BACKOFF_ATTEMPTS})`
 					);
