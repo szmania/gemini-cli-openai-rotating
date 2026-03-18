@@ -12,6 +12,12 @@ import {
 import { AuthManager } from "./auth";
 import { CODE_ASSIST_ENDPOINT, CODE_ASSIST_API_VERSION } from "./config";
 import { REASONING_MESSAGES, REASONING_CHUNK_DELAY, THINKING_CONTENT_CHUNK_SIZE } from "./constants";
+
+// Exponential backoff constants
+const MAX_BACKOFF_ATTEMPTS = 5;
+const INITIAL_BACKOFF_DELAY_MS = 2000; // Start with 2 seconds
+const MAX_BACKOFF_DELAY_S = 200; // 200 seconds max
+
 import { geminiCliModels } from "./models";
 import { validateImageUrl } from "./utils/image-utils";
 import { GenerationConfigValidator } from "./helpers/generation-config-validator";
@@ -532,7 +538,8 @@ export class GeminiApiClient {
 		nativeToolsManager?: NativeToolsManager,
 		signal?: AbortSignal,
 		rotationAttempt: number = 0,
-		failedProjects: string[] = []
+		failedProjects: string[] = [],
+		backoffAttempt: number = 0
 	): AsyncGenerator<StreamChunk> {
 		const projectId = await this.discoverProjectId();
 		(streamRequest as any).project = projectId;
@@ -565,7 +572,9 @@ export class GeminiApiClient {
 					originalModel,
 					nativeToolsManager,
 					signal,
-					rotationAttempt
+					rotationAttempt,
+					failedProjects,
+					backoffAttempt
 				); // Retry once
 				return;
 			}
@@ -607,7 +616,8 @@ export class GeminiApiClient {
 							nativeToolsManager,
 							signal,
 							rotationAttempt,
-							failedProjects
+							failedProjects,
+							backoffAttempt
 						);
 						return;
 					}
@@ -622,11 +632,13 @@ export class GeminiApiClient {
 						// Clear the cached project ID to force rediscovery with the new credential
 						this.projectId = null;
 						const newProjectId = await this.discoverProjectId();
-						
+
 						console.log(
-							`Got ${response.status} error on project '${oldProjectId}', rotating to project '${newProjectId}' (attempt ${rotationAttempt + 1} of ${maxRotations}) and retrying`
+							`Got ${response.status} error on project '${oldProjectId}', rotating to project '${newProjectId}' (attempt ${
+								rotationAttempt + 1
+							} of ${maxRotations}) and retrying`
 						);
-						
+
 						// Track failed projects for permission, rate limit, and timeout errors
 						const newFailedProjects = [...failedProjects, oldProjectId];
 
@@ -640,10 +652,39 @@ export class GeminiApiClient {
 							nativeToolsManager,
 							signal,
 							rotationAttempt + 1,
-							newFailedProjects
+							newFailedProjects,
+							backoffAttempt
 						);
 						return;
 					}
+				} else if (isRateLimited && backoffAttempt < MAX_BACKOFF_ATTEMPTS) {
+					// All credentials have been tried, now start exponential backoff for rate limit errors
+					const delay = Math.min(
+						INITIAL_BACKOFF_DELAY_MS * 2 ** backoffAttempt + Math.random() * 1000,
+						MAX_BACKOFF_DELAY_S * 1000
+					);
+
+					console.log(
+						`All credentials rate-limited. Backing off for ${delay.toFixed(0)}ms before retrying... (Backoff attempt ${
+							backoffAttempt + 1
+						}/${MAX_BACKOFF_ATTEMPTS})`
+					);
+					await new Promise((resolve) => setTimeout(resolve, delay));
+
+					// Retry from the beginning of the credential list after backoff
+					yield* this.performStreamRequest(
+						streamRequest,
+						needsThinkingClose,
+						true, // isRetry
+						realThinkingAsContent,
+						originalModel,
+						nativeToolsManager,
+						signal,
+						0, // Reset rotationAttempt
+						[], // Reset failedProjects
+						backoffAttempt + 1 // Increment backoffAttempt
+					);
+					return;
 				}
 				// If rotation failed or max attempts reached, we'll fall through to throw the original error
 			}
