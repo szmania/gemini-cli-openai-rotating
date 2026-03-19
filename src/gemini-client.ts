@@ -16,7 +16,7 @@ import { REASONING_MESSAGES, REASONING_CHUNK_DELAY, THINKING_CONTENT_CHUNK_SIZE 
 // Exponential backoff constants
 const MAX_BACKOFF_ATTEMPTS = 5;
 const INITIAL_BACKOFF_DELAY_MS = 2000; // Start with 2 seconds
-const MAX_BACKOFF_DELAY_S = 200; // 200 seconds max
+const MAX_BACKOFF_DELAY_S = 500; // 500 seconds max
 
 import { geminiCliModels } from "./models";
 import { validateImageUrl } from "./utils/image-utils";
@@ -981,7 +981,7 @@ type: "thinking_content",
 	/**
 	 * Recursively sanitizes tool definitions by removing unsupported JSON schema fields
 	 * that cause Gemini API to reject requests with 400 INVALID_ARGUMENT errors.
-	 * 
+	 *
 	 * @param data - The tool data to sanitize (objects, arrays, or primitives)
 	 */
 	private sanitizeTools(data: any): void {
@@ -1024,7 +1024,7 @@ type: "thinking_content",
 					delete data.type; // Avoid leaving an empty or invalid type array
 				}
 			}
-			
+
 			// Delete all unsupported JSON schema fields
 			const unsupportedKeys = ['$schema', 'strict', 'exclusiveMinimum', 'exclusiveMaximum', '$defs', '$ref', 'anyOf', 'oneOf', 'allOf', 'format', 'additionalProperties'];
 			for (const key of unsupportedKeys) {
